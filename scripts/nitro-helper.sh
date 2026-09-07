@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # nitro-helper.sh - Elevated hardware helper for OmaNitro (io.github.felipeasp.omanitro)
-# Provides hardware telemetry, fan control, platform power profiles,
-# battery limit/calibration, and GPU switching for Acer Nitro 5 (AN517-54).
+# Provides hardware telemetry, cooling controls, platform power profiles,
+# battery care, USB charging, hardware tweaks, and GPU switching for Acer Nitro / Predator.
 # ==============================================================================
 set -euo pipefail
 
@@ -54,11 +54,50 @@ detect_hwmon_path() {
 }
 
 # ------------------------------------------------------------------------------
+# Dynamic Hardware Info Detection
+# ------------------------------------------------------------------------------
+get_device_model() {
+  local model=""
+  if [[ -f "/sys/class/dmi/id/product_name" ]]; then
+    model=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+  fi
+  if [[ -z "$model" && -f "/sys/class/dmi/id/sys_vendor" ]]; then
+    model=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true)
+  fi
+  if [[ -z "$model" ]]; then
+    model="Acer Nitro 5"
+  fi
+  echo "$model" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+get_cpu_model() {
+  local cpu=""
+  cpu=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed -e 's/^[[:space:]]*//' -e 's/(R)//g' -e 's/(TM)//g' -e 's/ @.*//' -e 's/  */ /g' | tr -d '\r\n' || true)
+  if [[ -z "$cpu" ]]; then
+    cpu="Intel Core i5"
+  fi
+  echo "$cpu" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+get_gpu_model() {
+  local gpu=""
+  if command -v nvidia-smi &>/dev/null; then
+    gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1 || true)
+  fi
+  if [[ -z "$gpu" ]] && command -v lspci &>/dev/null; then
+    gpu=$(lspci 2>/dev/null | grep -i '3d\|vga' | grep -i 'nvidia' | sed -E 's/.*controller: //; s/.*\[//; s/\].*//' | head -n1 || true)
+  fi
+  if [[ -z "$gpu" ]]; then
+    gpu="Integrated Graphics"
+  fi
+  echo "$gpu" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+# ------------------------------------------------------------------------------
 # Privilege Elevation Handling
 # ------------------------------------------------------------------------------
 ensure_root() {
   if [[ $EUID -eq 0 ]]; then
-    # When running as root, fix read permissions on sysfs nodes so subsequent unprivileged status reads succeed
     local base
     if base=$(detect_base_path); then
       chmod -R a+r "$base" 2>/dev/null || true
@@ -116,6 +155,11 @@ get_status_json() {
   base=$(detect_base_path || true)
   hwmon=$(detect_hwmon_path || true)
 
+  local device_model cpu_model gpu_model
+  device_model=$(get_device_model)
+  cpu_model=$(get_cpu_model)
+  gpu_model=$(get_gpu_model)
+
   # 1. Fans & Temperatures
   local target_cpu=0 target_gpu=0 fan_mode="auto"
   if [[ -n "$base" && -f "${base}/fan_speed" ]]; then
@@ -148,15 +192,19 @@ get_status_json() {
 
   # 2. ACPI Platform Profile
   local current_profile="balanced"
-  local profile_choices_json='["quiet","balanced","performance"]'
+  local profile_choices_json='["quiet","balanced","balanced-performance","performance"]'
   if [[ -f "/sys/firmware/acpi/platform_profile" ]]; then
     current_profile=$(cat /sys/firmware/acpi/platform_profile 2>/dev/null || echo "balanced")
     current_profile="${current_profile// /}"
   fi
   if [[ -f "/sys/firmware/acpi/platform_profile_choices" ]]; then
     local choices_raw
-    choices_raw=$(cat /sys/firmware/acpi/platform_profile_choices 2>/dev/null || echo "quiet balanced performance")
-    profile_choices_json=$(echo "$choices_raw" | jq -c -R 'split(" ") | map(select(length > 0))' 2>/dev/null || echo '["quiet","balanced","performance"]')
+    choices_raw=$(cat /sys/firmware/acpi/platform_profile_choices 2>/dev/null || echo "quiet balanced balanced-performance performance")
+    local parsed_choices
+    parsed_choices=$(echo "$choices_raw" | jq -c -R 'split(" ") | map(select(length > 0))' 2>/dev/null || true)
+    if [[ -n "$parsed_choices" ]]; then
+      profile_choices_json="$parsed_choices"
+    fi
   fi
 
   # 3. Battery Care
@@ -181,7 +229,39 @@ get_status_json() {
     [[ "$cal_val" == "1" ]] && battery_calibrating="true"
   fi
 
-  # 4. Hybrid GPU (EnvyControl)
+  # 4. USB Power-off Charging (0, 10, 20, 30)
+  local usb_charging=0
+  if [[ -n "$base" && -f "${base}/usb_charging" ]]; then
+    local usb_raw
+    usb_raw=$(cat "${base}/usb_charging" 2>/dev/null || echo "0")
+    if [[ "$usb_raw" =~ ^(0|10|20|30)$ ]]; then
+      usb_charging="$usb_raw"
+    fi
+  fi
+
+  # 5. Hardware Tweaks (LCD Override, Backlight Timeout, Boot Sound)
+  local lcd_override="false"
+  if [[ -n "$base" && -f "${base}/lcd_override" ]]; then
+    local lcd_raw
+    lcd_raw=$(cat "${base}/lcd_override" 2>/dev/null || echo "0")
+    [[ "$lcd_raw" == "1" ]] && lcd_override="true"
+  fi
+
+  local backlight_timeout="false"
+  if [[ -n "$base" && -f "${base}/backlight_timeout" ]]; then
+    local bl_raw
+    bl_raw=$(cat "${base}/backlight_timeout" 2>/dev/null || echo "0")
+    [[ "$bl_raw" == "1" ]] && backlight_timeout="true"
+  fi
+
+  local boot_sound="false"
+  if [[ -n "$base" && -f "${base}/boot_animation_sound" ]]; then
+    local boot_raw
+    boot_raw=$(cat "${base}/boot_animation_sound" 2>/dev/null || echo "0")
+    [[ "$boot_raw" == "1" ]] && boot_sound="true"
+  fi
+
+  # 6. Hybrid GPU (EnvyControl)
   local gpu_mode="hybrid"
   local gpu_available="false"
   if command -v envycontrol &>/dev/null; then
@@ -196,12 +276,79 @@ get_status_json() {
     gpu_available="false"
   fi
 
-  # Clean unified JSON output
-  printf '{"fan":{"mode":"%s","target_cpu":%s,"target_gpu":%s,"cpu_rpm":%s,"gpu_rpm":%s,"cpu_temp":%s,"gpu_temp":%s,"sys_temp":%s},"profile":{"current":"%s","choices":%s},"battery":{"limiter":%s,"threshold":%s,"calibrating":%s},"gpu":{"mode":"%s","available":%s}}\n' \
-    "$fan_mode" "$target_cpu" "$target_gpu" "$cpu_rpm" "$gpu_rpm" "$cpu_temp" "$gpu_temp" "$sys_temp" \
-    "$current_profile" "$profile_choices_json" \
-    "$battery_limiter" "$battery_threshold" "$battery_calibrating" \
-    "$gpu_mode" "$gpu_available"
+  # Generate unified JSON with jq for rock-solid escaping
+  jq -n -c \
+    --arg dev "$device_model" \
+    --arg cpu "$cpu_model" \
+    --arg gpu "$gpu_model" \
+    --argjson cpu_temp "$cpu_temp" \
+    --argjson gpu_temp "$gpu_temp" \
+    --argjson sys_temp "$sys_temp" \
+    --argjson cpu_rpm "$cpu_rpm" \
+    --argjson gpu_rpm "$gpu_rpm" \
+    --arg fan_mode "$fan_mode" \
+    --argjson target_cpu "$target_cpu" \
+    --argjson target_gpu "$target_gpu" \
+    --arg current_profile "$current_profile" \
+    --argjson profile_choices "$profile_choices_json" \
+    --argjson battery_limiter "$battery_limiter" \
+    --argjson battery_threshold "$battery_threshold" \
+    --argjson battery_calibrating "$battery_calibrating" \
+    --argjson usb_charging "$usb_charging" \
+    --argjson lcd_override "$lcd_override" \
+    --argjson backlight_timeout "$backlight_timeout" \
+    --argjson boot_animation_sound "$boot_sound" \
+    --arg gpu_mode "$gpu_mode" \
+    --argjson gpu_available "$gpu_available" \
+    '{
+      device_model: $dev,
+      cpu_model: $cpu,
+      gpu_model: $gpu,
+      cpu_temp: $cpu_temp,
+      gpu_temp: $gpu_temp,
+      sys_temp: $sys_temp,
+      profile: $current_profile,
+      profile_choices: $profile_choices,
+      fan_mode: $fan_mode,
+      target_cpu: $target_cpu,
+      target_gpu: $target_gpu,
+      fan1_rpm: $cpu_rpm,
+      fan2_rpm: $gpu_rpm,
+      cpu_rpm: $cpu_rpm,
+      gpu_rpm: $gpu_rpm,
+      battery_limiter: $battery_limiter,
+      battery_threshold: $battery_threshold,
+      battery_calibration: $battery_calibrating,
+      usb_charging: $usb_charging,
+      lcd_override: $lcd_override,
+      backlight_timeout: $backlight_timeout,
+      boot_animation_sound: $boot_animation_sound,
+      gpu_mode: $gpu_mode,
+      gpu_available: $gpu_available,
+      fan: {
+        mode: $fan_mode,
+        target_cpu: $target_cpu,
+        target_gpu: $target_gpu,
+        cpu_rpm: $cpu_rpm,
+        gpu_rpm: $gpu_rpm,
+        cpu_temp: $cpu_temp,
+        gpu_temp: $gpu_temp,
+        sys_temp: $sys_temp
+      },
+      profile: {
+        current: $current_profile,
+        choices: $profile_choices
+      },
+      battery: {
+        limiter: $battery_limiter,
+        threshold: $battery_threshold,
+        calibrating: $battery_calibrating
+      },
+      gpu: {
+        mode: $gpu_mode,
+        available: $gpu_available
+      }
+    }'
 }
 
 # ------------------------------------------------------------------------------
@@ -260,7 +407,7 @@ set_profile() {
     prof="${2:-balanced}"
   fi
   if [[ -z "$prof" ]]; then
-    echo "Usage: $0 profile <quiet|balanced|performance>" >&2
+    echo "Usage: $0 profile <quiet|balanced|balanced-performance|performance>" >&2
     exit 1
   fi
 
@@ -269,6 +416,7 @@ set_profile() {
   case "$prof" in
     quiet|silent|low) prof="quiet" ;;
     balanced|normal|default) prof="balanced" ;;
+    balanced-perf|balanced-performance|bal-perf) prof="balanced-performance" ;;
     performance|turbo|high) prof="performance" ;;
   esac
 
@@ -277,7 +425,9 @@ set_profile() {
   fi
 
   if command -v powerprofilesctl &>/dev/null; then
-    powerprofilesctl set "$prof" 2>/dev/null || true
+    local pctl_prof="$prof"
+    [[ "$pctl_prof" == "balanced-performance" ]] && pctl_prof="performance"
+    powerprofilesctl set "$pctl_prof" 2>/dev/null || true
   fi
 
   save_config_key "acpi_profile" "$prof"
@@ -337,6 +487,88 @@ set_battery_calibrate() {
 
   echo "$val" > "${base}/battery_calibration"
   echo "OK: Battery calibrate set to $val"
+}
+
+set_usb_charging() {
+  local val="${1:-0}"
+  case "$val" in
+    0|off|false) val="0" ;;
+    10) val="10" ;;
+    20) val="20" ;;
+    30) val="30" ;;
+    *)
+      echo "Usage: $0 usb_charging <0|10|20|30>" >&2
+      exit 1
+      ;;
+  esac
+
+  ensure_root usb_charging "$val"
+  local base
+  base=$(detect_base_path) || { echo "ERROR: Sysfs base not found" >&2; exit 1; }
+
+  echo "$val" > "${base}/usb_charging"
+  save_config_key "usb_charging" "$val"
+  echo "OK: USB charging set to $val"
+}
+
+set_lcd_override() {
+  local val="${1:-0}"
+  case "$val" in
+    1|on|true) val="1" ;;
+    0|off|false) val="0" ;;
+    *)
+      echo "Usage: $0 lcd_override <0|1|on|off>" >&2
+      exit 1
+      ;;
+  esac
+
+  ensure_root lcd_override "$val"
+  local base
+  base=$(detect_base_path) || { echo "ERROR: Sysfs base not found" >&2; exit 1; }
+
+  echo "$val" > "${base}/lcd_override"
+  save_config_key "lcd_override" "$val"
+  echo "OK: LCD override set to $val"
+}
+
+set_backlight_timeout() {
+  local val="${1:-0}"
+  case "$val" in
+    1|on|true) val="1" ;;
+    0|off|false) val="0" ;;
+    *)
+      echo "Usage: $0 backlight_timeout <0|1|on|off>" >&2
+      exit 1
+      ;;
+  esac
+
+  ensure_root backlight_timeout "$val"
+  local base
+  base=$(detect_base_path) || { echo "ERROR: Sysfs base not found" >&2; exit 1; }
+
+  echo "$val" > "${base}/backlight_timeout"
+  save_config_key "backlight_timeout" "$val"
+  echo "OK: Backlight timeout set to $val"
+}
+
+set_boot_sound() {
+  local val="${1:-0}"
+  case "$val" in
+    1|on|true) val="1" ;;
+    0|off|false) val="0" ;;
+    *)
+      echo "Usage: $0 boot_sound <0|1|on|off>" >&2
+      exit 1
+      ;;
+  esac
+
+  ensure_root boot_sound "$val"
+  local base
+  base=$(detect_base_path) || { echo "ERROR: Sysfs base not found" >&2; exit 1; }
+
+  echo "$val" > "${base}/boot_animation_sound"
+  save_config_key "boot_sound" "$val"
+  echo "OK: Boot animation sound set to $val"
 }
 
 set_gpu() {
@@ -406,6 +638,35 @@ restore_state() {
       echo "${cpu},${gpu}" > "${base}/fan_speed" 2>/dev/null || true
       ;;
   esac
+
+  # 4. Restore USB charging
+  local usb_val
+  usb_val=$(get_config_key "usb_charging" "")
+  if [[ -n "$usb_val" && -f "${base}/usb_charging" ]]; then
+    echo "$usb_val" > "${base}/usb_charging" 2>/dev/null || true
+  fi
+
+  # 5. Restore LCD override
+  local lcd_val
+  lcd_val=$(get_config_key "lcd_override" "")
+  if [[ -n "$lcd_val" && -f "${base}/lcd_override" ]]; then
+    echo "$lcd_val" > "${base}/lcd_override" 2>/dev/null || true
+  fi
+
+  # 6. Restore Backlight timeout
+  local bl_val
+  bl_val=$(get_config_key "backlight_timeout" "")
+  if [[ -n "$bl_val" && -f "${base}/backlight_timeout" ]]; then
+    echo "$bl_val" > "${base}/backlight_timeout" 2>/dev/null || true
+  fi
+
+  # 7. Restore Boot sound
+  local boot_val
+  boot_val=$(get_config_key "boot_sound" "")
+  if [[ -n "$boot_val" && -f "${base}/boot_animation_sound" ]]; then
+    echo "$boot_val" > "${base}/boot_animation_sound" 2>/dev/null || true
+  fi
+
   echo "OK: Omanitro state restored."
 }
 
@@ -443,6 +704,18 @@ main() {
         get_status_json
       fi
       ;;
+    usb_charging|usb-charging|usb)
+      set_usb_charging "$@"
+      ;;
+    lcd_override|lcd-override|lcd)
+      set_lcd_override "$@"
+      ;;
+    backlight_timeout|backlight-timeout|backlight)
+      set_backlight_timeout "$@"
+      ;;
+    boot_sound|boot-sound|bootsound)
+      set_boot_sound "$@"
+      ;;
     gpu)
       set_gpu "$@"
       ;;
@@ -451,7 +724,7 @@ main() {
       ;;
     *)
       echo "Unknown command: $cmd" >&2
-      echo "Available commands: status, fan, profile, battery_limit, battery_calibrate, gpu, restore" >&2
+      echo "Available commands: status, fan, profile, battery_limit, battery_calibrate, usb_charging, lcd_override, backlight_timeout, boot_sound, gpu, restore" >&2
       exit 1
       ;;
   esac

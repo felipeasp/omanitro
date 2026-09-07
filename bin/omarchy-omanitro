@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # omarchy-omanitro - CLI interface for OmaNitro Acer Nitro 5 Hardware Plugin
-# Controls fans, thermal profiles, battery limiter, and hybrid GPU.
+# Controls fans, thermal profiles, battery limiter, USB power, and hybrid GPU.
 # ==============================================================================
 # omarchy:group=omanitro
-# omarchy:summary=Gerenciador de hardware para Acer Nitro 5 AN517-54 (OmaNitro)
-# omarchy:args=[fan|profile|battery|gpu|status] [subcomando]
+# omarchy:summary=Gerenciador de hardware para Acer Nitro 5 (OmaNitro)
+# omarchy:args=[fan|profile|battery|usb|tweaks|gpu|status] [subcomando]
 # omarchy:examples=omarchy omanitro fan auto|omarchy omanitro fan max|omarchy omanitro fan set 60 70|omarchy omanitro profile set performance|omarchy omanitro battery limit on|omarchy omanitro gpu hybrid
 set -euo pipefail
 
@@ -44,7 +44,7 @@ Categorias e Comandos:
     status [--json]      Exibe modo atual, RPM e temperaturas em tempo real
 
   profile
-    set <perfil>         Define perfil térmico ACPI: quiet, balanced, performance
+    set <perfil>         Define perfil térmico ACPI: quiet, balanced, balanced-performance, performance
     get [--json]         Exibe o perfil térmico ACPI atual e opções suportadas
 
   battery
@@ -54,6 +54,15 @@ Categorias e Comandos:
     calibrate start      Inicia o ciclo de calibração de bateria de fábrica
     calibrate stop       Interrompe o ciclo de calibração
     calibrate status     Verifica se há calibração em andamento
+
+  usb
+    set <0|10|20|30>     Define percentual limite para carregamento USB com notebook desligado
+    status               Exibe a configuração atual de carregamento USB
+
+  tweaks
+    lcd [on|off]         Ativa/desativa overdrive de tempo de resposta do LCD
+    backlight [on|off]   Ativa/desativa timeout de 30s do teclado retroiluminado
+    bootsound [on|off]   Ativa/desativa som de animação de inicialização da BIOS
 
   gpu
     hybrid               Modo híbrido Optimus (iGPU Intel + NVIDIA sob demanda)
@@ -69,6 +78,8 @@ Exemplos:
   omarchy omanitro fan set 50 70
   omarchy omanitro profile set performance
   omarchy omanitro battery limit on
+  omarchy omanitro usb set 30
+  omarchy omanitro tweaks lcd on
   omarchy omanitro gpu hybrid
 HELP
 }
@@ -91,41 +102,62 @@ full_status() {
     return 1
   fi
 
-  echo -e "${BOLD}${CYAN}=== Painel de Hardware: Acer Nitro 5 AN517-54 (OmaNitro) ===${NC}\n"
+  local dev cpu gpu
+  dev=$(echo "$data" | jq -r '.device_model // "Acer Nitro 5"')
+  cpu=$(echo "$data" | jq -r '.cpu_model // "CPU"')
+  gpu=$(echo "$data" | jq -r '.gpu_model // "GPU"')
+
+  echo -e "${BOLD}${CYAN}=== Painel de Hardware: ${dev} (OmaNitro) ===${NC}\n"
+
+  echo -e "${BOLD}Dispositivo:${NC}"
+  echo -e "  Modelo : ${dev}"
+  echo -e "  CPU    : ${cpu}"
+  echo -e "  GPU    : ${gpu}"
 
   local fan_mode cpu_rpm gpu_rpm cpu_temp gpu_temp sys_temp
-  fan_mode=$(echo "$data" | jq -r '.fan.mode // "auto"')
-  cpu_rpm=$(echo "$data" | jq -r '.fan.cpu_rpm // 0')
-  gpu_rpm=$(echo "$data" | jq -r '.fan.gpu_rpm // 0')
-  cpu_temp=$(echo "$data" | jq -r '.fan.cpu_temp // 0')
-  gpu_temp=$(echo "$data" | jq -r '.fan.gpu_temp // 0')
-  sys_temp=$(echo "$data" | jq -r '.fan.sys_temp // 0')
+  fan_mode=$(echo "$data" | jq -r '.fan_mode // .fan.mode // "auto"')
+  cpu_rpm=$(echo "$data" | jq -r '.fan1_rpm // .fan.cpu_rpm // 0')
+  gpu_rpm=$(echo "$data" | jq -r '.fan2_rpm // .fan.gpu_rpm // 0')
+  cpu_temp=$(echo "$data" | jq -r '.cpu_temp // .fan.cpu_temp // 0')
+  gpu_temp=$(echo "$data" | jq -r '.gpu_temp // .fan.gpu_temp // 0')
+  sys_temp=$(echo "$data" | jq -r '.sys_temp // .fan.sys_temp // 0')
 
-  echo -e "${BOLD}Ventoinhas & Temperaturas:${NC}"
+  echo -e "\n${BOLD}Ventoinhas & Temperaturas:${NC}"
   echo -e "  Modo de Operação : ${fan_mode^^}"
   echo -e "  CPU Fan          : ${cpu_rpm} RPM (Temp: ${cpu_temp}°C)"
   echo -e "  GPU Fan          : ${gpu_rpm} RPM (Temp: ${gpu_temp}°C)"
   [[ "$sys_temp" != "0" ]] && echo -e "  Motherboard      : Temp: ${sys_temp}°C"
 
   local prof choices
-  prof=$(echo "$data" | jq -r '.profile.current // "balanced"')
-  choices=$(echo "$data" | jq -r '.profile.choices | join(" ") // ""')
+  prof=$(echo "$data" | jq -r '.profile.current // .profile // "balanced"')
+  choices=$(echo "$data" | jq -r '(.profile_choices // .profile.choices) | join(" ") // ""')
   echo -e "\n${BOLD}Perfil Térmico ACPI:${NC}"
   echo -e "  Perfil Atual       : ${prof}"
   echo -e "  Opções Disponíveis : ${choices}"
 
-  local batt_lim
-  batt_lim=$(echo "$data" | jq -r '.battery.limiter // false')
-  echo -e "\n${BOLD}Bateria:${NC}"
+  local batt_lim usb_chg
+  batt_lim=$(echo "$data" | jq -r '.battery_limiter // .battery.limiter // false')
+  usb_chg=$(echo "$data" | jq -r '.usb_charging // 0')
+  echo -e "\n${BOLD}Bateria & Energia:${NC}"
   if [[ "$batt_lim" == "true" ]]; then
     echo -e "  Trava de Carga (80%) : ${GREEN}ATIVADA${NC} (preserva saúde da bateria)"
   else
     echo -e "  Trava de Carga (80%) : ${YELLOW}DESATIVADA${NC} (carregando até 100%)"
   fi
+  echo -e "  USB Power-off Charge : ${usb_chg}%"
+
+  local lcd_ov bl_to boot_snd
+  lcd_ov=$(echo "$data" | jq -r '.lcd_override // false')
+  bl_to=$(echo "$data" | jq -r '.backlight_timeout // false')
+  boot_snd=$(echo "$data" | jq -r '.boot_animation_sound // false')
+  echo -e "\n${BOLD}Tweaks de Hardware:${NC}"
+  echo -e "  LCD Overdrive        : $([[ "$lcd_ov" == "true" ]] && echo -e "${GREEN}ATIVADO${NC}" || echo "DESATIVADO")"
+  echo -e "  Backlight 30s Timeout: $([[ "$bl_to" == "true" ]] && echo -e "${GREEN}ATIVADO${NC}" || echo "DESATIVADO")"
+  echo -e "  Som de Boot BIOS     : $([[ "$boot_snd" == "true" ]] && echo -e "${GREEN}ATIVADO${NC}" || echo "DESATIVADO")"
 
   local gpu_mode gpu_avail
-  gpu_mode=$(echo "$data" | jq -r '.gpu.mode // "unsupported"')
-  gpu_avail=$(echo "$data" | jq -r '.gpu.available // false')
+  gpu_mode=$(echo "$data" | jq -r '.gpu_mode // .gpu.mode // "unsupported"')
+  gpu_avail=$(echo "$data" | jq -r '.gpu_available // .gpu.available // false')
   echo -e "\n${BOLD}Gráficos Híbridos (EnvyControl):${NC}"
   if [[ "$gpu_avail" == "true" ]]; then
     echo -e "  Modo GPU Ativo : ${gpu_mode^^}"
@@ -145,8 +177,11 @@ main() {
   shift || true
 
   case "$cmd" in
-    --help|-h|help)
+    help|--help|-h)
       show_help
+      ;;
+    status)
+      full_status "${1:-}"
       ;;
     fan)
       local action="${1:-status}"
@@ -181,13 +216,13 @@ main() {
             run_helper status | jq -c '.profile'
           else
             local cur
-            cur=$(run_helper status | jq -r '.profile.current')
+            cur=$(run_helper status | jq -r '.profile.current // .profile')
             echo "Perfil Térmico ACPI Atual: $cur"
           fi
           ;;
         *)
           echo -e "${RED}Ação de perfil desconhecida: '$action'${NC}" >&2
-          echo "Opções válidas: set [quiet|balanced|performance] | get" >&2
+          echo "Opções válidas: set [quiet|balanced|balanced-performance|performance] | get" >&2
           return 1
           ;;
       esac
@@ -207,7 +242,7 @@ main() {
                 run_helper status | jq -c '.battery'
               else
                 local lim
-                lim=$(run_helper status | jq -r '.battery.limiter')
+                lim=$(run_helper status | jq -r '.battery_limiter // .battery.limiter')
                 echo "Trava de Bateria (80%): $lim"
               fi
               ;;
@@ -225,10 +260,10 @@ main() {
             stop|0) run_helper battery_calibrate 0 ;;
             status)
               if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
-                run_helper status | jq -c '.battery.calibrating'
+                run_helper status | jq -c '.battery_calibration'
               else
                 local cal
-                cal=$(run_helper status | jq -r '.battery.calibrating')
+                cal=$(run_helper status | jq -r '.battery_calibration // .battery.calibrating')
                 echo "Calibração de Bateria: $cal"
               fi
               ;;
@@ -252,36 +287,102 @@ main() {
           ;;
       esac
       ;;
-    gpu)
+    usb)
       local action="${1:-status}"
       shift || true
       case "$action" in
-        hybrid|integrated|nvidia)
-          run_helper gpu "$action"
+        set)
+          run_helper usb_charging "$@"
           ;;
-        status|query)
+        status)
+          local val
+          val=$(run_helper status | jq -r '.usb_charging')
+          echo "USB Power-off Charging: ${val}%"
+          ;;
+        *)
+          echo "Uso: omarchy omanitro usb [set <0|10|20|30> | status]" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    tweaks)
+      local tweak="${1:-status}"
+      shift || true
+      case "$tweak" in
+        lcd)
+          local val="${1:-status}"
+          case "$val" in
+            on|1) run_helper lcd_override 1 ;;
+            off|0) run_helper lcd_override 0 ;;
+            status)
+              local state
+              state=$(run_helper status | jq -r '.lcd_override')
+              echo "LCD Overdrive: $state"
+              ;;
+            *) echo "Uso: omarchy omanitro tweaks lcd [on|off|status]" >&2 ;;
+          esac
+          ;;
+        backlight)
+          local val="${1:-status}"
+          case "$val" in
+            on|1) run_helper backlight_timeout 1 ;;
+            off|0) run_helper backlight_timeout 0 ;;
+            status)
+              local state
+              state=$(run_helper status | jq -r '.backlight_timeout')
+              echo "Backlight Timeout: $state"
+              ;;
+            *) echo "Uso: omarchy omanitro tweaks backlight [on|off|status]" >&2 ;;
+          esac
+          ;;
+        bootsound)
+          local val="${1:-status}"
+          case "$val" in
+            on|1) run_helper boot_sound 1 ;;
+            off|0) run_helper boot_sound 0 ;;
+            status)
+              local state
+              state=$(run_helper status | jq -r '.boot_animation_sound')
+              echo "Boot Sound: $state"
+              ;;
+            *) echo "Uso: omarchy omanitro tweaks bootsound [on|off|status]" >&2 ;;
+          esac
+          ;;
+        status)
+          run_helper status | jq '{lcd_override, backlight_timeout, boot_animation_sound}'
+          ;;
+        *)
+          echo "Uso: omarchy omanitro tweaks [lcd|backlight|bootsound|status]" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    gpu)
+      local mode="${1:-status}"
+      shift || true
+      case "$mode" in
+        hybrid|integrated|nvidia)
+          run_helper gpu "$mode"
+          ;;
+        status)
           if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
             run_helper status | jq -c '.gpu'
           else
-            local gm ga
-            gm=$(run_helper status | jq -r '.gpu.mode')
-            ga=$(run_helper status | jq -r '.gpu.available')
-            echo "Modo GPU: $gm (Disponível: $ga)"
+            local cur
+            cur=$(run_helper status | jq -r '.gpu_mode // .gpu.mode')
+            echo "Modo GPU Ativo (EnvyControl): $cur"
           fi
           ;;
         *)
-          echo -e "${RED}Ação gráfica desconhecida: '$action'${NC}" >&2
+          echo -e "${RED}Modo GPU desconhecido: '$mode'${NC}" >&2
           echo "Opções válidas: hybrid | integrated | nvidia | status" >&2
           return 1
           ;;
       esac
       ;;
-    status)
-      full_status "$@"
-      ;;
     *)
-      echo -e "${RED}Comando não reconhecido: '$cmd'${NC}\n" >&2
-      show_help >&2
+      echo -e "${RED}Comando desconhecido: '$cmd'${NC}" >&2
+      show_help
       return 1
       ;;
   esac
