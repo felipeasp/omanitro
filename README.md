@@ -49,34 +49,20 @@
 
 ## 📦 Installation
 
-### Method A: Manual Git Clone (Recommended)
+### Recommended: Via Omarchy Plugin Store
+1. Open your Omarchy App Launcher or Settings and navigate to the **Plugin Store**.
+2. Search for **OmaNitro**.
+3. Click **Install**.
+4. Reload the shell or add the OmaNitro widget to your bar layout.
 
-1. Clone the repository into your Omarchy shell plugins directory:
-   ```bash
-   mkdir -p ~/.config/omarchy/plugins
-   git clone https://github.com/felipeasp/omanitro.git ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
-   ```
+### Manual / Development Installation
+```bash
+git clone https://github.com/felipeasp/omanitro.git ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
+chmod +x ~/.config/omarchy/plugins/io.github.felipeasp.omanitro/scripts/nitro-helper.sh
+omarchy-shell shell rescanPlugins
+```
 
-2. Make backend scripts executable:
-   ```bash
-   chmod +x ~/.config/omarchy/plugins/io.github.felipeasp.omanitro/scripts/nitro-helper.sh
-   chmod +x ~/.config/omarchy/plugins/io.github.felipeasp.omanitro/bin/omarchy-omanitro
-   ```
-
-3. Enable the plugin in your Omarchy bar (e.g. right section):
-   ```bash
-   omarchy plugin enable io.github.felipeasp.omanitro --section right
-   ```
-
-4. Refresh the Omarchy desktop shell:
-   ```bash
-   omarchy-shell io.github.felipeasp.omanitro refresh
-   # Or restart the shell session:
-   omarchy restart shell
-   ```
-
-### Method B: System-Wide Helper & Passwordless Polkit Setup
-
+### Optional: System-Wide Helper & Passwordless Polkit Setup
 To enable passwordless operation for users in the `wheel` group and enable boot state restoration:
 ```bash
 cd ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
