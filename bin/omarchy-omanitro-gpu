@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# omarchy:group=omanitro
+# omarchy:name=gpu
+# omarchy:summary=Gerenciamento de GPUs híbridas via envycontrol (hybrid, integrated, nvidia)
+# omarchy:args=[hybrid|integrated|nvidia|status]
+# omarchy:examples=omarchy omanitro gpu hybrid|omarchy omanitro gpu integrated|omarchy omanitro gpu nvidia|omarchy omanitro gpu status
+exec omarchy-omanitro gpu "$@"

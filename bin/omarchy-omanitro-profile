@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# omarchy:group=omanitro
+# omarchy:name=profile
+# omarchy:summary=Controle dos perfis térmicos e energéticos ACPI (quiet, balanced, performance)
+# omarchy:args=[set|get] [quiet|balanced|performance]
+# omarchy:examples=omarchy omanitro profile set quiet|omarchy omanitro profile set balanced|omarchy omanitro profile set performance|omarchy omanitro profile get
+exec omarchy-omanitro profile "$@"

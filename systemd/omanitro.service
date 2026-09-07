@@ -1,0 +1,13 @@
+[Unit]
+Description=Omanitro Hardware State Restorer
+Documentation=https://omarchy.org/
+After=systemd-modules-load.service linuwu_sense.service
+Wants=linuwu_sense.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/omanitro/nitro-helper.sh restore
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# omarchy:group=omanitro
+# omarchy:name=battery
+# omarchy:summary=Gerenciamento de bateria: trava de 80% e calibração de fábrica
+# omarchy:args=[limit|calibrate] [on|off|start|stop|status]
+# omarchy:examples=omarchy omanitro battery limit on|omarchy omanitro battery limit off|omarchy omanitro battery limit status|omarchy omanitro battery calibrate start|omarchy omanitro battery calibrate stop
+exec omarchy-omanitro battery "$@"

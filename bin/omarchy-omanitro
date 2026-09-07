@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# omarchy-omanitro - CLI interface for OmaNitro Acer Nitro 5 Hardware Plugin
+# Controls fans, thermal profiles, battery limiter, and hybrid GPU.
+# ==============================================================================
+# omarchy:group=omanitro
+# omarchy:summary=Gerenciador de hardware para Acer Nitro 5 AN517-54 (OmaNitro)
+# omarchy:args=[fan|profile|battery|gpu|status] [subcomando]
+# omarchy:examples=omarchy omanitro fan auto|omarchy omanitro fan max|omarchy omanitro fan set 60 70|omarchy omanitro profile set performance|omarchy omanitro battery limit on|omarchy omanitro gpu hybrid
+set -euo pipefail
+
+REAL_BIN="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$REAL_BIN")" && pwd)"
+HELPER="/usr/lib/omanitro/nitro-helper.sh"
+
+# Fallback paths
+if [[ ! -x "$HELPER" ]]; then
+  if [[ -x "${SCRIPT_DIR}/../scripts/nitro-helper.sh" ]]; then
+    HELPER="${SCRIPT_DIR}/../scripts/nitro-helper.sh"
+  elif [[ -x "${HOME}/.config/omarchy/plugins/io.github.felipeasp.omanitro/scripts/nitro-helper.sh" ]]; then
+    HELPER="${HOME}/.config/omarchy/plugins/io.github.felipeasp.omanitro/scripts/nitro-helper.sh"
+  fi
+fi
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+show_help() {
+  cat << 'HELP'
+Uso:
+  omarchy omanitro [categoria] [comando] [argumentos...]
+
+Categorias e Comandos:
+  fan
+    auto                 Define ventoinhas em modo automático (controlado pela BIOS)
+    max                  Define ventoinhas em velocidade máxima (CoolBoost 100%)
+    set <cpu> <gpu>      Define porcentagem personalizada para CPU e GPU (0 a 100)
+    status [--json]      Exibe modo atual, RPM e temperaturas em tempo real
+
+  profile
+    set <perfil>         Define perfil térmico ACPI: quiet, balanced, performance
+    get [--json]         Exibe o perfil térmico ACPI atual e opções suportadas
+
+  battery
+    limit on             Ativa a trava de carga em 80% (preserva a saúde da bateria)
+    limit off            Desativa a trava (permite carregar até 100%)
+    limit status         Exibe o estado da trava de carga (80% vs 100%)
+    calibrate start      Inicia o ciclo de calibração de bateria de fábrica
+    calibrate stop       Interrompe o ciclo de calibração
+    calibrate status     Verifica se há calibração em andamento
+
+  gpu
+    hybrid               Modo híbrido Optimus (iGPU Intel + NVIDIA sob demanda)
+    integrated           Desliga a dGPU NVIDIA (máxima economia de bateria)
+    nvidia               Força o uso contínuo da dGPU NVIDIA
+    status [--json]      Exibe o modo gráfico ativo (envycontrol)
+
+  status [--json]        Exibe um resumo completo de todo o hardware do notebook
+
+Exemplos:
+  omarchy omanitro fan auto
+  omarchy omanitro fan max
+  omarchy omanitro fan set 50 70
+  omarchy omanitro profile set performance
+  omarchy omanitro battery limit on
+  omarchy omanitro gpu hybrid
+HELP
+}
+
+run_helper() {
+  "$HELPER" "$@"
+}
+
+full_status() {
+  local json_mode="${1:-false}"
+  if [[ "$json_mode" == "--json" || "$json_mode" == "json" ]]; then
+    run_helper status
+    return 0
+  fi
+
+  local data
+  data=$(run_helper status 2>/dev/null || true)
+  if [[ -z "$data" ]]; then
+    echo -e "${RED}Erro: Não foi possível obter telemetria do hardware.${NC}" >&2
+    return 1
+  fi
+
+  echo -e "${BOLD}${CYAN}=== Painel de Hardware: Acer Nitro 5 AN517-54 (OmaNitro) ===${NC}\n"
+
+  local fan_mode cpu_rpm gpu_rpm cpu_temp gpu_temp sys_temp
+  fan_mode=$(echo "$data" | jq -r '.fan.mode // "auto"')
+  cpu_rpm=$(echo "$data" | jq -r '.fan.cpu_rpm // 0')
+  gpu_rpm=$(echo "$data" | jq -r '.fan.gpu_rpm // 0')
+  cpu_temp=$(echo "$data" | jq -r '.fan.cpu_temp // 0')
+  gpu_temp=$(echo "$data" | jq -r '.fan.gpu_temp // 0')
+  sys_temp=$(echo "$data" | jq -r '.fan.sys_temp // 0')
+
+  echo -e "${BOLD}Ventoinhas & Temperaturas:${NC}"
+  echo -e "  Modo de Operação : ${fan_mode^^}"
+  echo -e "  CPU Fan          : ${cpu_rpm} RPM (Temp: ${cpu_temp}°C)"
+  echo -e "  GPU Fan          : ${gpu_rpm} RPM (Temp: ${gpu_temp}°C)"
+  [[ "$sys_temp" != "0" ]] && echo -e "  Motherboard      : Temp: ${sys_temp}°C"
+
+  local prof choices
+  prof=$(echo "$data" | jq -r '.profile.current // "balanced"')
+  choices=$(echo "$data" | jq -r '.profile.choices | join(" ") // ""')
+  echo -e "\n${BOLD}Perfil Térmico ACPI:${NC}"
+  echo -e "  Perfil Atual       : ${prof}"
+  echo -e "  Opções Disponíveis : ${choices}"
+
+  local batt_lim
+  batt_lim=$(echo "$data" | jq -r '.battery.limiter // false')
+  echo -e "\n${BOLD}Bateria:${NC}"
+  if [[ "$batt_lim" == "true" ]]; then
+    echo -e "  Trava de Carga (80%) : ${GREEN}ATIVADA${NC} (preserva saúde da bateria)"
+  else
+    echo -e "  Trava de Carga (80%) : ${YELLOW}DESATIVADA${NC} (carregando até 100%)"
+  fi
+
+  local gpu_mode gpu_avail
+  gpu_mode=$(echo "$data" | jq -r '.gpu.mode // "unsupported"')
+  gpu_avail=$(echo "$data" | jq -r '.gpu.available // false')
+  echo -e "\n${BOLD}Gráficos Híbridos (EnvyControl):${NC}"
+  if [[ "$gpu_avail" == "true" ]]; then
+    echo -e "  Modo GPU Ativo : ${gpu_mode^^}"
+  else
+    echo -e "  Modo GPU       : ${YELLOW}EnvyControl não instalado${NC} (yay -S envycontrol)"
+  fi
+  echo ""
+}
+
+main() {
+  if (( $# == 0 )); then
+    show_help
+    return 0
+  fi
+
+  local cmd="$1"
+  shift || true
+
+  case "$cmd" in
+    --help|-h|help)
+      show_help
+      ;;
+    fan)
+      local action="${1:-status}"
+      shift || true
+      case "$action" in
+        auto|max|set)
+          run_helper fan "$action" "$@"
+          ;;
+        status)
+          if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
+            run_helper status | jq -c '.fan'
+          else
+            full_status
+          fi
+          ;;
+        *)
+          echo -e "${RED}Ação de ventoinha desconhecida: '$action'${NC}" >&2
+          echo "Opções válidas: auto | max | set <cpu> <gpu> | status" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    profile)
+      local action="${1:-get}"
+      shift || true
+      case "$action" in
+        set)
+          run_helper profile "$@"
+          ;;
+        get|status)
+          if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
+            run_helper status | jq -c '.profile'
+          else
+            local cur
+            cur=$(run_helper status | jq -r '.profile.current')
+            echo "Perfil Térmico ACPI Atual: $cur"
+          fi
+          ;;
+        *)
+          echo -e "${RED}Ação de perfil desconhecida: '$action'${NC}" >&2
+          echo "Opções válidas: set [quiet|balanced|performance] | get" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    battery)
+      local action="${1:-limit}"
+      shift || true
+      case "$action" in
+        limit)
+          local val="${1:-status}"
+          shift || true
+          case "$val" in
+            on|1) run_helper battery_limit 1 ;;
+            off|0) run_helper battery_limit 0 ;;
+            status)
+              if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
+                run_helper status | jq -c '.battery'
+              else
+                local lim
+                lim=$(run_helper status | jq -r '.battery.limiter')
+                echo "Trava de Bateria (80%): $lim"
+              fi
+              ;;
+            *)
+              echo "Uso: omarchy omanitro battery limit [on|off|status]" >&2
+              return 1
+              ;;
+          esac
+          ;;
+        calibrate)
+          local val="${1:-status}"
+          shift || true
+          case "$val" in
+            start|1) run_helper battery_calibrate 1 ;;
+            stop|0) run_helper battery_calibrate 0 ;;
+            status)
+              if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
+                run_helper status | jq -c '.battery.calibrating'
+              else
+                local cal
+                cal=$(run_helper status | jq -r '.battery.calibrating')
+                echo "Calibração de Bateria: $cal"
+              fi
+              ;;
+            *)
+              echo "Uso: omarchy omanitro battery calibrate [start|stop|status]" >&2
+              return 1
+              ;;
+          esac
+          ;;
+        status)
+          if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
+            run_helper status | jq -c '.battery'
+          else
+            full_status
+          fi
+          ;;
+        *)
+          echo -e "${RED}Ação de bateria desconhecida: '$action'${NC}" >&2
+          echo "Opções válidas: limit [on|off|status] | calibrate [start|stop|status] | status" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    gpu)
+      local action="${1:-status}"
+      shift || true
+      case "$action" in
+        hybrid|integrated|nvidia)
+          run_helper gpu "$action"
+          ;;
+        status|query)
+          if [[ "${1:-}" == "--json" || "${1:-}" == "json" ]]; then
+            run_helper status | jq -c '.gpu'
+          else
+            local gm ga
+            gm=$(run_helper status | jq -r '.gpu.mode')
+            ga=$(run_helper status | jq -r '.gpu.available')
+            echo "Modo GPU: $gm (Disponível: $ga)"
+          fi
+          ;;
+        *)
+          echo -e "${RED}Ação gráfica desconhecida: '$action'${NC}" >&2
+          echo "Opções válidas: hybrid | integrated | nvidia | status" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    status)
+      full_status "$@"
+      ;;
+    *)
+      echo -e "${RED}Comando não reconhecido: '$cmd'${NC}\n" >&2
+      show_help >&2
+      return 1
+      ;;
+  esac
+}
+
+main "$@"

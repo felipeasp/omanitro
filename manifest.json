@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.felipeasp.omanitro",
+  "name": "OmaNitro",
+  "version": "1.0.0",
+  "author": "Felipe Pires (@felipeasp)",
+  "repository": "https://github.com/felipeasp/omanitro",
+  "license": "GPL-3.0-or-later",
+  "description": "Hardware telemetry, cooling controls, platform power profiles, battery care, and hybrid GPU switching for Acer Nitro 5 (AN517-54).",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaNitro",
+    "description": "Acer Nitro 5 Hardware Controls & Cooling",
+    "category": "Hardware",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 2
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Telemetry refresh interval (seconds)",
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 2
+      }
+    ]
+  }
+}

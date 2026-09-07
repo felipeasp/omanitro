@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# omarchy:group=omanitro
+# omarchy:name=fan
+# omarchy:summary=Controle de velocidade das ventoinhas (CPU/GPU) do Acer Nitro (omanitro)
+# omarchy:args=[auto|max|set|status] [cpu_0-100] [gpu_0-100]
+# omarchy:examples=omarchy omanitro fan auto|omarchy omanitro fan max|omarchy omanitro fan set 50 70|omarchy omanitro fan status
+exec omarchy-omanitro fan "$@"
