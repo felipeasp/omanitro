@@ -2,7 +2,7 @@
   "id": "io.github.felipeasp.omanitro",
   "name": "OmaNitro",
   "version": "1.0.0",
-  "description": "Hardware monitor and control panel for Acer Nitro/Predator laptops running the linuwu_sense kernel driver.",
+  "description": "Hardware monitor and control panel for Acer Nitro/Predator laptops running the linuwu_sense kernel driver (forked by @felipeasp with patches for modern Linux kernels from upstream by 0x7375646F).",
   "author": "Felipe Pires",
   "license": "GPL-3.0",
   "entry": "BarWidget.qml",
@@ -10,5 +10,10 @@
   "dependencies": [
     "linuwu_sense",
     "pkexec"
-  ]
+  ],
+  "driver": {
+    "name": "linuwu_sense",
+    "upstream": "https://github.com/0x7375646F/Linuwu-Sense",
+    "repository": "https://github.com/felipeasp/linuwu-sense"
+  }
 }

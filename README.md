@@ -3,9 +3,9 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)]()
 [![Omarchy Shell](https://img.shields.io/badge/Shell-Omarchy%20(Quickshell)-purple.svg)]()
-[![Kernel Driver](https://img.shields.io/badge/Driver-linuwu__sense-success.svg)]()
+[![Kernel Driver](https://img.shields.io/badge/Driver-linuwu__sense-success.svg)](https://github.com/felipeasp/linuwu-sense)
 
-**OmaNitro** (`io.github.felipeasp.omanitro`) is a native Quickshell/QML hardware monitoring and cooling control plugin for the **Omarchy Desktop Shell**, designed specifically for **Acer Nitro 5** (e.g. AN517-54, AN515-57) and compatible Acer Nitro/Predator laptops running the [`linuwu_sense`](https://github.com/0x1e-lab/linuwu-sense) kernel driver.
+**OmaNitro** (`io.github.felipeasp.omanitro`) is a native Quickshell/QML hardware monitoring and cooling control plugin for the **Omarchy Desktop Shell**, designed specifically for **Acer Nitro 5** (e.g. AN517-54, AN515-57) and compatible Acer Nitro/Predator laptops running the [`linuwu_sense`](https://github.com/felipeasp/linuwu-sense) kernel driver.
 
 ---
 
@@ -34,10 +34,23 @@
 ## 📋 Prerequisites
 
 1. **Linux Kernel Module (`linuwu_sense`):**
-   The [`linuwu_sense`](https://github.com/0x1e-lab/linuwu-sense) kernel driver must be compiled and loaded to expose the Acer WMI gaming attributes in sysfs.
-   ```bash
-   lsmod | grep linuwu_sense
-   ```
+   The kernel driver must be compiled and loaded to expose the Acer WMI gaming attributes in sysfs.
+   - **Recommended Fork (Modern Linux Kernels):**
+     Use the patched fork maintained by [@felipeasp](https://github.com/felipeasp) with compatibility fixes for recent Linux kernel versions:
+     ```bash
+     git clone https://github.com/felipeasp/linuwu-sense.git
+     cd linuwu-sense
+     # Follow build & installation instructions in the repository:
+     make
+     sudo make install
+     sudo modprobe linuwu_sense
+     ```
+   - **Original Upstream Driver:**
+     This driver is a patch and continuation of the original upstream project by [0x7375646F](https://github.com/0x7375646F) at [`https://github.com/0x7375646F/Linuwu-Sense`](https://github.com/0x7375646F/Linuwu-Sense), updated to ensure full compatibility with modern Linux kernels.
+   - Verify that the driver is active:
+     ```bash
+     lsmod | grep linuwu_sense
+     ```
 2. **Polkit & `pkexec`:**
    Required for non-root execution of sysfs write commands and GPU switching.
 3. **`jq`:**
@@ -121,7 +134,7 @@ Ensure the kernel driver is active:
 ```bash
 lsmod | grep linuwu_sense
 ```
-If it is not loaded, load it manually or ensure your DKMS package is built:
+If it is not loaded, load it manually:
 ```bash
 sudo modprobe linuwu_sense
 ```
@@ -154,6 +167,14 @@ journalctl --user -u omarchy-shell -f
 # Or monitor general shell logs:
 journalctl --since "5 minutes ago" | grep -i "omanitro"
 ```
+
+---
+
+## 🙏 Credits & Upstream Driver
+
+- **Original Driver Author:** Special thanks to [0x7375646F](https://github.com/0x7375646F) for creating the original [`Linuwu-Sense`](https://github.com/0x7375646F/Linuwu-Sense) driver that paved the way for Acer Nitro/Predator hardware telemetry and controls on Linux.
+- **Modern Kernel Fork:** Maintained and patched for newer Linux kernels by [Felipe Pires (@felipeasp)](https://github.com/felipeasp) at [`https://github.com/felipeasp/linuwu-sense`](https://github.com/felipeasp/linuwu-sense).
+- **Omarchy Shell Ecosystem:** Built for the [Omarchy](https://github.com/omarchy) desktop shell environment.
 
 ---
 
