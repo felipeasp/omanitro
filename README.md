@@ -1,5 +1,9 @@
 # OmaNitro
 
+<p align="center">
+  <img src="assets/preview.png" alt="OmaNitro Dashboard Preview" width="380">
+</p>
+
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)]()
 [![Omarchy Shell](https://img.shields.io/badge/Shell-Omarchy%20(Quickshell)-purple.svg)]()
