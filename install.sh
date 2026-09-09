@@ -29,6 +29,9 @@ if [[ -n "$USER_HOME" && -d "$USER_HOME" ]]; then
   cp -f "${PLUGIN_SRC_DIR}/manifest.json" "$TARGET_PLUGIN_DIR/"
   cp -f "${PLUGIN_SRC_DIR}/BarWidget.qml" "$TARGET_PLUGIN_DIR/"
   cp -f "${PLUGIN_SRC_DIR}/Panel.qml" "$TARGET_PLUGIN_DIR/"
+  if [[ -f "${PLUGIN_SRC_DIR}/preview.png" ]]; then
+    cp -f "${PLUGIN_SRC_DIR}/preview.png" "$TARGET_PLUGIN_DIR/"
+  fi
   cp -f "${PLUGIN_SRC_DIR}/scripts/nitro-helper.sh" "${TARGET_PLUGIN_DIR}/scripts/"
   chmod +x "${TARGET_PLUGIN_DIR}/scripts/nitro-helper.sh"
 

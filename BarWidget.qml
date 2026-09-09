@@ -70,10 +70,14 @@ BarWidget {
     }
   }
 
-  function togglePanel() {
+  function toggle() {
     if (panelLoader.item && panelLoader.item.toggle) {
       panelLoader.item.toggle()
     }
+  }
+
+  function togglePanel() {
+    toggle()
   }
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
@@ -211,7 +215,7 @@ BarWidget {
     function close(): void { root.close() }
     function show(): void { root.open() }
     function hide(): void { root.close() }
-    function toggle(): void { root.togglePanel() }
+    function toggle(): void { root.toggle() }
   }
 
   BarIconButton {
@@ -229,7 +233,7 @@ BarWidget {
       if (b === Qt.RightButton) {
         root.cycleFanMode()
       } else {
-        root.togglePanel()
+        root.toggle()
       }
     }
   }
