@@ -44,6 +44,7 @@
      ```bash
      git clone https://github.com/felipeasp/linuwu-sense.git
      cd linuwu-sense
+     git checkout d5066fc72a197891fefe823626ee7d2da7411661
      # Follow build & installation instructions in the repository:
      make
      sudo make install

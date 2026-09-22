@@ -24,10 +24,9 @@ rm -f /usr/share/polkit-1/actions/io.github.felipeasp.omanitro.policy
 rm -f /usr/share/polkit-1/actions/org.omarchy.omanitro.policy
 rm -f /etc/polkit-1/rules.d/50-io.github.felipeasp.omanitro.rules
 rm -f /etc/polkit-1/rules.d/50-org.omarchy.omanitro.rules
-rm -f /usr/bin/omarchy-omanitro*
-rm -f "${USER_HOME}/Work/bin"/omarchy-omanitro* 2>/dev/null || true
-
+rm -f /usr/bin/omarchy-omanitro
 if [[ -n "$USER_HOME" ]]; then
+  rm -f "${USER_HOME}/Work/bin/omarchy-omanitro" 2>/dev/null || true
   rm -rf "${USER_HOME}/.config/omarchy/plugins/io.github.felipeasp.omanitro"
   rm -rf "${USER_HOME}/.config/omarchy/plugins/omanitro"
 fi

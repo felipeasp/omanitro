@@ -13,6 +13,27 @@ NC='\033[0m'
 
 PLUGIN_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# If running with elevated privileges, snapshot the installation files into a secure,
+# root-owned temporary directory (0700) before copying or processing any files to eliminate TOCTOU risks.
+INSTALL_SRC_DIR="$PLUGIN_SRC_DIR"
+SECURE_TMP_DIR=""
+
+cleanup() {
+  if [[ -n "${SECURE_TMP_DIR:-}" && -d "${SECURE_TMP_DIR:-}" ]]; then
+    rm -rf "$SECURE_TMP_DIR"
+  fi
+}
+trap cleanup EXIT INT TERM
+
+if [[ $EUID -eq 0 ]]; then
+  SECURE_TMP_DIR="$(mktemp -d)"
+  chown root:root "$SECURE_TMP_DIR"
+  chmod 0700 "$SECURE_TMP_DIR"
+  cp -a "${PLUGIN_SRC_DIR}/." "$SECURE_TMP_DIR/"
+  chown -R root:root "$SECURE_TMP_DIR"
+  INSTALL_SRC_DIR="$SECURE_TMP_DIR"
+fi
+
 # If run without sudo, install the user-level plugin files
 REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
 USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
@@ -26,13 +47,13 @@ if [[ -n "$USER_HOME" && -d "$USER_HOME" ]]; then
   rm -rf "$TARGET_PLUGIN_DIR"
   mkdir -p "${TARGET_PLUGIN_DIR}/scripts"
 
-  cp -f "${PLUGIN_SRC_DIR}/manifest.json" "$TARGET_PLUGIN_DIR/"
-  cp -f "${PLUGIN_SRC_DIR}/BarWidget.qml" "$TARGET_PLUGIN_DIR/"
-  cp -f "${PLUGIN_SRC_DIR}/Panel.qml" "$TARGET_PLUGIN_DIR/"
-  if [[ -f "${PLUGIN_SRC_DIR}/preview.png" ]]; then
-    cp -f "${PLUGIN_SRC_DIR}/preview.png" "$TARGET_PLUGIN_DIR/"
+  cp -f "${INSTALL_SRC_DIR}/manifest.json" "$TARGET_PLUGIN_DIR/"
+  cp -f "${INSTALL_SRC_DIR}/BarWidget.qml" "$TARGET_PLUGIN_DIR/"
+  cp -f "${INSTALL_SRC_DIR}/Panel.qml" "$TARGET_PLUGIN_DIR/"
+  if [[ -f "${INSTALL_SRC_DIR}/preview.png" ]]; then
+    cp -f "${INSTALL_SRC_DIR}/preview.png" "$TARGET_PLUGIN_DIR/"
   fi
-  cp -f "${PLUGIN_SRC_DIR}/scripts/nitro-helper.sh" "${TARGET_PLUGIN_DIR}/scripts/"
+  cp -f "${INSTALL_SRC_DIR}/scripts/nitro-helper.sh" "${TARGET_PLUGIN_DIR}/scripts/"
   chmod +x "${TARGET_PLUGIN_DIR}/scripts/nitro-helper.sh"
 
   if [[ $EUID -eq 0 ]]; then
@@ -45,19 +66,19 @@ fi
 if [[ $EUID -eq 0 ]]; then
   echo -e "${BLUE}==>${NC} Installing privileged helper in /usr/lib/omanitro/..."
   mkdir -p /usr/lib/omanitro
-  install -m 755 "${PLUGIN_SRC_DIR}/scripts/nitro-helper.sh" /usr/lib/omanitro/nitro-helper.sh
+  install -m 755 "${INSTALL_SRC_DIR}/scripts/nitro-helper.sh" /usr/lib/omanitro/nitro-helper.sh
 
   echo -e "${BLUE}==>${NC} Installing Polkit policy and rules..."
   mkdir -p /usr/share/polkit-1/actions /etc/polkit-1/rules.d
-  install -m 644 "${PLUGIN_SRC_DIR}/polkit/io.github.felipeasp.omanitro.policy" /usr/share/polkit-1/actions/io.github.felipeasp.omanitro.policy
-  install -m 644 "${PLUGIN_SRC_DIR}/polkit/50-io.github.felipeasp.omanitro.rules" /etc/polkit-1/rules.d/50-io.github.felipeasp.omanitro.rules
+  install -m 644 "${INSTALL_SRC_DIR}/polkit/io.github.felipeasp.omanitro.policy" /usr/share/polkit-1/actions/io.github.felipeasp.omanitro.policy
+  install -m 644 "${INSTALL_SRC_DIR}/polkit/50-io.github.felipeasp.omanitro.rules" /etc/polkit-1/rules.d/50-io.github.felipeasp.omanitro.rules
 
   echo -e "${BLUE}==>${NC} Installing CLI command in /usr/bin/..."
-  install -m 755 "${PLUGIN_SRC_DIR}/bin/omarchy-omanitro" /usr/bin/omarchy-omanitro
+  install -m 755 "${INSTALL_SRC_DIR}/bin/omarchy-omanitro" /usr/bin/omarchy-omanitro
 
-  if [[ -f "${PLUGIN_SRC_DIR}/systemd/omanitro.service" ]]; then
+  if [[ -f "${INSTALL_SRC_DIR}/systemd/omanitro.service" ]]; then
     echo -e "${BLUE}==>${NC} Installing systemd state-restoration service..."
-    install -m 644 "${PLUGIN_SRC_DIR}/systemd/omanitro.service" /etc/systemd/system/omanitro.service
+    install -m 644 "${INSTALL_SRC_DIR}/systemd/omanitro.service" /etc/systemd/system/omanitro.service
     systemctl daemon-reload
     systemctl enable --now omanitro.service 2>/dev/null || true
   fi
@@ -69,7 +90,10 @@ fi
 
 # 3. CLI in user bin
 if [[ -d "${USER_HOME}/Work/bin" ]]; then
-  install -m 755 "${PLUGIN_SRC_DIR}/bin/omarchy-omanitro" "${USER_HOME}/Work/bin/omarchy-omanitro"
+  install -m 755 "${INSTALL_SRC_DIR}/bin/omarchy-omanitro" "${USER_HOME}/Work/bin/omarchy-omanitro"
+  if [[ $EUID -eq 0 ]]; then
+    chown "$REAL_USER:$REAL_USER" "${USER_HOME}/Work/bin/omarchy-omanitro"
+  fi
 fi
 
 echo -e "\n${GREEN}${BOLD}✓ OmaNitro setup complete!${NC}"
