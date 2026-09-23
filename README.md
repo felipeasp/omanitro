@@ -73,19 +73,24 @@
 3. Click **Install**.
 4. Reload the shell or add the OmaNitro widget to your bar layout.
 
-### Manual / Development Installation
+### Manual / Development Installation (User-Level)
+To clone and install the user-level desktop shell plugin:
 ```bash
 git clone https://github.com/felipeasp/omanitro.git ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
-chmod +x ~/.config/omarchy/plugins/io.github.felipeasp.omanitro/scripts/nitro-helper.sh
+cd ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
+./install.sh
 omarchy-shell shell rescanPlugins
 ```
 
-### Optional: System-Wide Helper & Passwordless Polkit Setup
-To enable passwordless operation for users in the `wheel` group and enable boot state restoration:
+### Privileged System Installation (Polkit Rules, Helper, Systemd Service & CLI)
+To enable system-wide hardware control, passwordless operation for users in the `wheel` group, systemd boot state restoration, and `/usr/bin/omarchy-omanitro`, run the dedicated privileged installer workflow:
 ```bash
 cd ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
-sudo ./install.sh
+sudo ./install-privileged.sh
 ```
+
+> [!NOTE]
+> For security, `install.sh` refuses to run with root privileges directly inside user-writable directories to prevent TOCTOU path reopening and mutable trust anchor attacks. Privileged installation must be executed via `install-privileged.sh`, which isolates assets in a restricted root-owned staging directory (`0700 root:root`), strictly rejects symbolic links and non-regular files, and verifies SHA-256 integrity digests on root-staged files before touching system targets.
 
 ---
 
