@@ -1,0 +1,32 @@
+# Maintainer: Felipe Pires <felipeasp>
+pkgname=omanitro
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Acer Nitro 5 hardware telemetry and cooling control system helper for Omarchy"
+arch=('any')
+url="https://github.com/felipeasp/omanitro"
+license=('GPL-3.0-or-later')
+depends=('bash' 'polkit' 'jq' 'systemd')
+optdepends=(
+  'linuwu_sense: kernel module exposing Acer Nitro/Predator WMI attributes'
+  'envycontrol: GPU switching for hybrid/integrated/nvidia modes'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/heads/main.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/$pkgname-main"
+
+  # Helper backend
+  install -Dm755 scripts/nitro-helper.sh "$pkgdir/usr/lib/omanitro/nitro-helper.sh"
+
+  # Polkit policy & authorization rules
+  install -Dm644 polkit/io.github.felipeasp.omanitro.policy "$pkgdir/usr/share/polkit-1/actions/io.github.felipeasp.omanitro.policy"
+  install -Dm644 polkit/50-io.github.felipeasp.omanitro.rules "$pkgdir/etc/polkit-1/rules.d/50-io.github.felipeasp.omanitro.rules"
+
+  # System CLI
+  install -Dm755 bin/omarchy-omanitro "$pkgdir/usr/bin/omarchy-omanitro"
+
+  # Systemd restoration service
+  install -Dm644 systemd/omanitro.service "$pkgdir/usr/lib/systemd/system/omanitro.service"
+}

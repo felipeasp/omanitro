@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# install.sh - User Installer for OmaNitro Hardware Plugin
+# install.sh - User-Space Installer for OmaNitro Shell Plugin
 # ==============================================================================
 set -euo pipefail
 
@@ -14,23 +14,17 @@ NC='\033[0m'
 PLUGIN_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ------------------------------------------------------------------------------
-# Security Check: Refuse execution as root from user-writable directories
+# Security Boundary Enforcement:
+# Refuse root execution. The shell plugin installer operates strictly in user space.
 # ------------------------------------------------------------------------------
 if [[ $EUID -eq 0 ]]; then
-  SRC_OWNER="$(stat -c '%u' "$PLUGIN_SRC_DIR" 2>/dev/null || echo "1000")"
-  SRC_PERMS="$(stat -c '%a' "$PLUGIN_SRC_DIR" 2>/dev/null || echo "777")"
-
-  if [[ "$SRC_OWNER" -ne 0 ]] || (( (SRC_PERMS & 0022) != 0 )); then
-    echo -e "${RED}Security Error: install.sh must refuse to run as root directly from a user-writable directory.${NC}" >&2
-    echo -e "${RED}The source directory '${PLUGIN_SRC_DIR}' is owned by UID ${SRC_OWNER} or writable by non-root users.${NC}" >&2
-    echo -e "${YELLOW}To install user plugin files, run without sudo:${NC}" >&2
-    echo -e "  ${BOLD}./install.sh${NC}" >&2
-    echo -e "${YELLOW}To install privileged system components (Polkit rules, systemd service, /usr/bin/omarchy-omanitro), run:${NC}" >&2
-    echo -e "  ${BOLD}sudo ./install-privileged.sh${NC}\n" >&2
-    exit 1
-  fi
-  # If executed as root in a restricted root-owned environment, delegate to privileged installer
-  exec "${PLUGIN_SRC_DIR}/install-privileged.sh" "$@"
+  echo -e "${RED}Security Error: install.sh is an unprivileged user-space installer and must NOT be run as root.${NC}" >&2
+  echo -e "${YELLOW}Privileged system components (Polkit rules, systemd service, CLI) are decoupled from the user checkout.${NC}" >&2
+  echo -e "${YELLOW}To install system components, use your system package manager:${NC}" >&2
+  echo -e "  ${BOLD}yay -S omanitro${NC}\n" >&2
+  echo -e "Or execute the independent root bootstrap installer:${NC}" >&2
+  echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash${NC}\n" >&2
+  exit 1
 fi
 
 # ------------------------------------------------------------------------------
@@ -55,10 +49,10 @@ check_regular_file() {
 # ------------------------------------------------------------------------------
 # User Plugin Installation
 # ------------------------------------------------------------------------------
-REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
+REAL_USER="$(whoami)"
 USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
 
-echo -e "${BLUE}${BOLD}=== Installing OmaNitro Hardware Plugin ===${NC}\n"
+echo -e "${BLUE}${BOLD}=== Installing OmaNitro Shell Plugin ===${NC}\n"
 
 if [[ -n "$USER_HOME" && -d "$USER_HOME" ]]; then
   TARGET_PLUGIN_DIR="${USER_HOME}/.config/omarchy/plugins/io.github.felipeasp.omanitro"
@@ -86,11 +80,11 @@ if [[ -n "$USER_HOME" && -d "$USER_HOME" ]]; then
   cp -f "$src_helper" "${TARGET_PLUGIN_DIR}/scripts/"
   chmod +x "${TARGET_PLUGIN_DIR}/scripts/nitro-helper.sh"
 
-  echo -e "${GREEN}✓ Shell plugin files installed.${NC}"
+  echo -e "${GREEN}✓ Shell plugin files installed successfully.${NC}"
 fi
 
 # ------------------------------------------------------------------------------
-# User CLI Installation
+# User CLI Installation (Optional fallback for unprivileged environments)
 # ------------------------------------------------------------------------------
 USER_BIN_INSTALLED="false"
 if [[ -d "${USER_HOME}/Work/bin" ]]; then
@@ -110,5 +104,8 @@ if [[ -d "${USER_HOME}/.local/bin" && "$USER_BIN_INSTALLED" == "false" ]]; then
 fi
 
 echo -e "\n${GREEN}${BOLD}✓ OmaNitro user plugin setup complete!${NC}\n"
-echo -e "${YELLOW}Note: To install system-wide Polkit rules and privileged helpers (/usr/bin/omarchy-omanitro, /usr/lib/omanitro/nitro-helper.sh, systemd service), run:${NC}"
-echo -e "  ${BOLD}sudo ./install-privileged.sh${NC}\n"
+echo -e "${YELLOW}Note: For passwordless hardware control, systemd state restoration, and /usr/bin/omarchy-omanitro,${NC}"
+echo -e "${YELLOW}install the system package via your package manager:${NC}"
+echo -e "  ${BOLD}yay -S omanitro${NC}"
+echo -e "${YELLOW}Or execute the standalone root bootstrap:${NC}"
+echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash${NC}\n"

@@ -1,34 +1,27 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# uninstall.sh - Uninstaller for OmaNitro
+# uninstall.sh - Uninstaller for OmaNitro Shell Plugin
 # ==============================================================================
 set -euo pipefail
 
-if [[ $EUID -ne 0 ]]; then
-  echo "Execute como root: sudo $0"
-  exit 1
-fi
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
 USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
 
-echo "Desinstalando OmaNitro..."
+echo -e "${BLUE}=== Removing OmaNitro Shell Plugin ===${NC}\n"
 
-systemctl stop omanitro.service 2>/dev/null || true
-systemctl disable omanitro.service 2>/dev/null || true
-rm -f /etc/systemd/system/omanitro.service
-systemctl daemon-reload
-
-rm -rf /usr/lib/omanitro
-rm -f /usr/share/polkit-1/actions/io.github.felipeasp.omanitro.policy
-rm -f /usr/share/polkit-1/actions/org.omarchy.omanitro.policy
-rm -f /etc/polkit-1/rules.d/50-io.github.felipeasp.omanitro.rules
-rm -f /etc/polkit-1/rules.d/50-org.omarchy.omanitro.rules
-rm -f /usr/bin/omarchy-omanitro
-if [[ -n "$USER_HOME" ]]; then
+if [[ -n "$USER_HOME" && -d "$USER_HOME" ]]; then
   rm -f "${USER_HOME}/Work/bin/omarchy-omanitro" 2>/dev/null || true
+  rm -f "${USER_HOME}/.local/bin/omarchy-omanitro" 2>/dev/null || true
   rm -rf "${USER_HOME}/.config/omarchy/plugins/io.github.felipeasp.omanitro"
   rm -rf "${USER_HOME}/.config/omarchy/plugins/omanitro"
+  echo -e "${GREEN}✓ User plugin files removed.${NC}"
 fi
 
-echo "Desinstalação do OmaNitro concluída com sucesso."
+echo -e "\n${YELLOW}Note: If you installed the system-wide package, remove it using your package manager:${NC}"
+echo -e "  sudo pacman -R omanitro\n"

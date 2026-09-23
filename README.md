@@ -67,13 +67,15 @@
 
 ## 📦 Installation
 
-### Recommended: Via Omarchy Plugin Store
+### 1. Desktop Shell Plugin (User Space)
+
+#### Recommended: Via Omarchy Plugin Store
 1. Open your Omarchy App Launcher or Settings and navigate to the **Plugin Store**.
 2. Search for **OmaNitro**.
 3. Click **Install**.
 4. Reload the shell or add the OmaNitro widget to your bar layout.
 
-### Manual / Development Installation (User-Level)
+#### Manual / Development Installation (User Space)
 To clone and install the user-level desktop shell plugin:
 ```bash
 git clone https://github.com/felipeasp/omanitro.git ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
@@ -82,15 +84,30 @@ cd ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
 omarchy-shell shell rescanPlugins
 ```
 
-### Privileged System Installation (Polkit Rules, Helper, Systemd Service & CLI)
-To enable system-wide hardware control, passwordless operation for users in the `wheel` group, systemd boot state restoration, and `/usr/bin/omarchy-omanitro`, run the dedicated privileged installer workflow:
+### 2. Privileged System Components (Polkit Rules, Helper, Systemd Service & CLI)
+
+To enable hardware control without password prompts for users in the `wheel` group, systemd boot state restoration, and the `/usr/bin/omarchy-omanitro` system command, install the privileged helper components.
+
+> [!IMPORTANT]
+> **Privilege Boundary Separation:** In accordance with Omarchy security architecture, privileged installation is completely decoupled from the user-writable plugin checkout to eliminate mutable trust anchors and TOCTOU vulnerabilities. The user-space `install.sh` strictly refuses root execution.
+
+#### Option A: Via System Package (Recommended)
+Install the standalone system package via your AUR / Arch package helper:
 ```bash
-cd ~/.config/omarchy/plugins/io.github.felipeasp.omanitro
-sudo ./install-privileged.sh
+yay -S omanitro
+```
+Or build from the included package definition:
+```bash
+cd packaging
+makepkg -si
 ```
 
-> [!NOTE]
-> For security, `install.sh` refuses to run with root privileges directly inside user-writable directories to prevent TOCTOU path reopening and mutable trust anchor attacks. Privileged installation must be executed via `install-privileged.sh`, which isolates assets in a restricted root-owned staging directory (`0700 root:root`), strictly rejects symbolic links and non-regular files, and verifies SHA-256 integrity digests on root-staged files before touching system targets.
+#### Option B: Via Standalone Root Bootstrap
+Fetch and execute the independent root bootstrap installer directly:
+```bash
+curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash
+```
+The root bootstrap operates strictly in an isolated staging area (`0700 root:root`), downloads the archive directly into root storage, verifies the SHA-256 integrity digests on all root-staged components before touching system paths, and installs the verified payload atomically.
 
 ---
 
