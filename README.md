@@ -105,7 +105,7 @@ makepkg -si
 #### Option B: Via Standalone Root Bootstrap
 Fetch and execute the independent root bootstrap installer directly:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash
 ```
 The root bootstrap operates strictly in an isolated staging area (`0700 root:root`), downloads the archive directly into root storage, verifies the SHA-256 integrity digests on all root-staged components before touching system paths, and installs the verified payload atomically.
 

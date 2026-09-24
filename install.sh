@@ -23,7 +23,7 @@ if [[ $EUID -eq 0 ]]; then
   echo -e "${YELLOW}To install system components, use your system package manager:${NC}" >&2
   echo -e "  ${BOLD}yay -S omanitro${NC}\n" >&2
   echo -e "Or execute the independent root bootstrap installer:${NC}" >&2
-  echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash${NC}\n" >&2
+  echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash${NC}\n" >&2
   exit 1
 fi
 
@@ -108,4 +108,4 @@ echo -e "${YELLOW}Note: For passwordless hardware control, systemd state restora
 echo -e "${YELLOW}install the system package via your package manager:${NC}"
 echo -e "  ${BOLD}yay -S omanitro${NC}"
 echo -e "${YELLOW}Or execute the standalone root bootstrap:${NC}"
-echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash${NC}\n"
+echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash${NC}\n"

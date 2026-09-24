@@ -11,11 +11,11 @@ optdepends=(
   'linuwu_sense: kernel module exposing Acer Nitro/Predator WMI attributes'
   'envycontrol: GPU switching for hybrid/integrated/nvidia modes'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/heads/main.tar.gz")
-sha256sums=('SKIP')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('bf70e8c169ae4293922c92301b96b41b2d88f8d9f3cae27bc0a62f02082b2b06')
 
 package() {
-  cd "$srcdir/$pkgname-main"
+  cd "$srcdir/$pkgname-$pkgver"
 
   # Helper backend
   install -Dm755 scripts/nitro-helper.sh "$pkgdir/usr/lib/omanitro/nitro-helper.sh"

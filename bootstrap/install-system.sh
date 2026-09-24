@@ -14,6 +14,7 @@
 #   user-writable plugin checkout (e.g. via curl | sudo bash).
 # - Operates strictly inside a temporary root-owned staging directory (0700 root:root).
 # - Downloads the authenticated repository archive directly into root staging.
+# - Validates immutable SHA-256 archive checksum before extracting.
 # - Validates immutable SHA-256 integrity digests of all privileged components
 #   strictly inside root staging before touching any system target.
 # - Rejects symlinks and non-regular files.
@@ -29,7 +30,7 @@ NC='\033[0m'
 
 # Allow help without root
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  echo "Usage: sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh)\" [commit-or-tag]"
+  echo "Usage: sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh)\" [tag-or-commit] [expected-archive-sha256]"
   echo ""
   echo "Independent root bootstrap installer for OmaNitro system components."
   echo "Fetches and validates privileged assets in an isolated root sandbox."
@@ -39,12 +40,40 @@ fi
 # Enforce root execution
 if [[ $EUID -ne 0 ]]; then
   echo -e "${RED}Security Error: bootstrap/install-system.sh must be executed as root.${NC}" >&2
-  echo -e "Usage: curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/main/bootstrap/install-system.sh | sudo bash" >&2
+  echo -e "Usage: curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash" >&2
   exit 1
 fi
 
-TARGET_REF="${1:-main}"
+PINNED_TAG="v1.0.0"
+PINNED_ARCHIVE_SHA256="bf70e8c169ae4293922c92301b96b41b2d88f8d9f3cae27bc0a62f02082b2b06"
+
+TARGET_REF="${1:-$PINNED_TAG}"
 REPO_URL="https://github.com/felipeasp/omanitro"
+
+# Disallow mutable branches
+if [[ "$TARGET_REF" == "main" || "$TARGET_REF" == "master" || "$TARGET_REF" == "HEAD" ]]; then
+  echo -e "${RED}Security Error: Installation from mutable branch '${TARGET_REF}' is strictly prohibited.${NC}" >&2
+  echo -e "${RED}Please use an immutable release tag (e.g. ${PINNED_TAG}) or specific commit SHA.${NC}" >&2
+  exit 1
+fi
+
+case "$TARGET_REF" in
+  "v1.0.0")
+    EXPECTED_ARCHIVE_SHA256="$PINNED_ARCHIVE_SHA256"
+    ;;
+  "3b8777ff145af0bc9094c2a417781fa4f4f4b8a8")
+    EXPECTED_ARCHIVE_SHA256="98aa232430dbd4b05cff634db63d791536ff2badfeeb1c0f490951e2e1d70430"
+    ;;
+  *)
+    if [[ -n "${2:-}" ]]; then
+      EXPECTED_ARCHIVE_SHA256="$2"
+    else
+      echo -e "${RED}Security Error: Unknown or unverified target ref '${TARGET_REF}'.${NC}" >&2
+      echo -e "${RED}To install an alternate commit/tag, specify its expected archive SHA-256 digest as parameter 2.${NC}" >&2
+      exit 1
+    fi
+    ;;
+esac
 
 # ==============================================================================
 # Trusted SHA256 Checksum Manifest for Privileged Installation Files
@@ -83,7 +112,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ------------------------------------------------------------------------------
-# 2. Fetch Source Archive Directly into Root-Owned Staging
+# 2. Fetch and Verify Source Archive Directly into Root-Owned Staging
 # ------------------------------------------------------------------------------
 ARCHIVE_FILE="${ROOT_STAGE_DIR}/omanitro.tar.gz"
 EXTRACT_DIR="${ROOT_STAGE_DIR}/extracted"
@@ -97,6 +126,17 @@ if ! curl -fsSL "$ARCHIVE_URL" -o "$ARCHIVE_FILE"; then
   exit 1
 fi
 
+echo -e "${BLUE}==>${NC} Verifying archive SHA-256 integrity digest..."
+ACTUAL_ARCHIVE_SHA256="$(sha256sum "$ARCHIVE_FILE" | awk '{print $1}')"
+if [[ "$ACTUAL_ARCHIVE_SHA256" != "$EXPECTED_ARCHIVE_SHA256" ]]; then
+  echo -e "${RED}Security Error: Archive SHA-256 digest mismatch for '${TARGET_REF}'.${NC}" >&2
+  echo -e "${RED}  Expected: ${EXPECTED_ARCHIVE_SHA256}${NC}" >&2
+  echo -e "${RED}  Actual:   ${ACTUAL_ARCHIVE_SHA256}${NC}" >&2
+  exit 1
+fi
+echo -e "${GREEN}✓ Archive SHA-256 digest verified (${ACTUAL_ARCHIVE_SHA256:0:16}...).${NC}\n"
+
+echo -e "${BLUE}==>${NC} Extracting verified archive into root staging..."
 tar -xzf "$ARCHIVE_FILE" --strip-components=1 -C "$EXTRACT_DIR"
 chown -R root:root "$EXTRACT_DIR"
 chmod -R go-rwx "$EXTRACT_DIR"
