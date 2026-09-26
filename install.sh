@@ -14,6 +14,23 @@ NC='\033[0m'
 PLUGIN_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ------------------------------------------------------------------------------
+# Target Reference Validation:
+# Ensure target references cannot accept movable refs without strict immutable commit pinning.
+# ------------------------------------------------------------------------------
+PINNED_COMMIT="3b8777ff145af0bc9094c2a417781fa4f4f4b8a8"
+if [[ $# -gt 0 ]]; then
+  TARGET_REF="$1"
+  if [[ "$TARGET_REF" == "main" || "$TARGET_REF" == "master" || "$TARGET_REF" == "HEAD" || "$TARGET_REF" == "develop" ]]; then
+    echo -e "${RED}Security Error: Installation from mutable branch '${TARGET_REF}' is strictly prohibited.${NC}" >&2
+    exit 1
+  fi
+  if [[ "$TARGET_REF" != "$PINNED_COMMIT" && "$TARGET_REF" != "v1.0.0" && ! "$TARGET_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo -e "${RED}Security Error: Target reference '${TARGET_REF}' is a movable ref without strict immutable commit pinning.${NC}" >&2
+    exit 1
+  fi
+fi
+
+# ------------------------------------------------------------------------------
 # Security Boundary Enforcement:
 # Refuse root execution. The shell plugin installer operates strictly in user space.
 # ------------------------------------------------------------------------------
@@ -22,8 +39,8 @@ if [[ $EUID -eq 0 ]]; then
   echo -e "${YELLOW}Privileged system components (Polkit rules, systemd service, CLI) are decoupled from the user checkout.${NC}" >&2
   echo -e "${YELLOW}To install system components, use your system package manager:${NC}" >&2
   echo -e "  ${BOLD}yay -S omanitro${NC}\n" >&2
-  echo -e "Or execute the independent root bootstrap installer:${NC}" >&2
-  echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash${NC}\n" >&2
+  echo -e "Or execute the independent root installer:${NC}" >&2
+  echo -e "  ${BOLD}sudo ./install-privileged.sh${NC}\n" >&2
   exit 1
 fi
 
@@ -107,5 +124,5 @@ echo -e "\n${GREEN}${BOLD}✓ OmaNitro user plugin setup complete!${NC}\n"
 echo -e "${YELLOW}Note: For passwordless hardware control, systemd state restoration, and /usr/bin/omarchy-omanitro,${NC}"
 echo -e "${YELLOW}install the system package via your package manager:${NC}"
 echo -e "  ${BOLD}yay -S omanitro${NC}"
-echo -e "${YELLOW}Or execute the standalone root bootstrap:${NC}"
-echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash${NC}\n"
+echo -e "${YELLOW}Or execute the independent root installer:${NC}"
+echo -e "  ${BOLD}sudo ./install-privileged.sh${NC}\n"

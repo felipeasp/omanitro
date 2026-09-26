@@ -1,6 +1,7 @@
 # Maintainer: Felipe Pires <felipeasp>
 pkgname=omanitro
 pkgver=1.0.0
+_commit=3b8777ff145af0bc9094c2a417781fa4f4f4b8a8
 pkgrel=1
 pkgdesc="Acer Nitro 5 hardware telemetry and cooling control system helper for Omarchy"
 arch=('any')
@@ -11,11 +12,11 @@ optdepends=(
   'linuwu_sense: kernel module exposing Acer Nitro/Predator WMI attributes'
   'envycontrol: GPU switching for hybrid/integrated/nvidia modes'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('bf70e8c169ae4293922c92301b96b41b2d88f8d9f3cae27bc0a62f02082b2b06')
+source=("$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz")
+sha256sums=('98aa232430dbd4b05cff634db63d791536ff2badfeeb1c0f490951e2e1d70430')
 
 package() {
-  cd "$srcdir/$pkgname-$pkgver"
+  cd "$srcdir/$pkgname-$_commit"
 
   # Helper backend
   install -Dm755 scripts/nitro-helper.sh "$pkgdir/usr/lib/omanitro/nitro-helper.sh"

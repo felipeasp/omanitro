@@ -10,8 +10,8 @@
 # - /etc/systemd/system/omanitro.service
 #
 # Security Architecture:
-# - Designed to be fetched and executed directly by root independently of any
-#   user-writable plugin checkout (e.g. via curl | sudo bash).
+# - Designed to be executed directly by root independently of any
+#   user-writable plugin checkout.
 # - Operates strictly inside a temporary root-owned staging directory (0700 root:root).
 # - Downloads the authenticated repository archive directly into root staging.
 # - Validates immutable SHA-256 archive checksum before extracting.
@@ -30,7 +30,7 @@ NC='\033[0m'
 
 # Allow help without root
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  echo "Usage: sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh)\" [tag-or-commit] [expected-archive-sha256]"
+  echo "Usage: sudo ./bootstrap/install-system.sh [commit-sha] [expected-archive-sha256]"
   echo ""
   echo "Independent root bootstrap installer for OmaNitro system components."
   echo "Fetches and validates privileged assets in an isolated root sandbox."
@@ -40,36 +40,45 @@ fi
 # Enforce root execution
 if [[ $EUID -ne 0 ]]; then
   echo -e "${RED}Security Error: bootstrap/install-system.sh must be executed as root.${NC}" >&2
-  echo -e "Usage: curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash" >&2
+  echo -e "Usage: sudo ./bootstrap/install-system.sh [commit-sha] [expected-archive-sha256]" >&2
   exit 1
 fi
 
-PINNED_TAG="v1.0.0"
-PINNED_ARCHIVE_SHA256="bf70e8c169ae4293922c92301b96b41b2d88f8d9f3cae27bc0a62f02082b2b06"
+PINNED_COMMIT="3b8777ff145af0bc9094c2a417781fa4f4f4b8a8"
+PINNED_ARCHIVE_SHA256="98aa232430dbd4b05cff634db63d791536ff2badfeeb1c0f490951e2e1d70430"
 
-TARGET_REF="${1:-$PINNED_TAG}"
+TARGET_REF="${1:-$PINNED_COMMIT}"
 REPO_URL="https://github.com/felipeasp/omanitro"
 
-# Disallow mutable branches
-if [[ "$TARGET_REF" == "main" || "$TARGET_REF" == "master" || "$TARGET_REF" == "HEAD" ]]; then
+# Prohibit mutable branches
+if [[ "$TARGET_REF" == "main" || "$TARGET_REF" == "master" || "$TARGET_REF" == "HEAD" || "$TARGET_REF" == "develop" ]]; then
   echo -e "${RED}Security Error: Installation from mutable branch '${TARGET_REF}' is strictly prohibited.${NC}" >&2
-  echo -e "${RED}Please use an immutable release tag (e.g. ${PINNED_TAG}) or specific commit SHA.${NC}" >&2
+  echo -e "${RED}Please use the immutable commit SHA (${PINNED_COMMIT}).${NC}" >&2
   exit 1
 fi
 
 case "$TARGET_REF" in
-  "v1.0.0")
+  "$PINNED_COMMIT")
     EXPECTED_ARCHIVE_SHA256="$PINNED_ARCHIVE_SHA256"
     ;;
-  "3b8777ff145af0bc9094c2a417781fa4f4f4b8a8")
-    EXPECTED_ARCHIVE_SHA256="98aa232430dbd4b05cff634db63d791536ff2badfeeb1c0f490951e2e1d70430"
+  "v1.0.0")
+    # Release tag v1.0.0 is verified against an independent, static hash
+    EXPECTED_ARCHIVE_SHA256="bf70e8c169ae4293922c92301b96b41b2d88f8d9f3cae27bc0a62f02082b2b06"
     ;;
   *)
+    # Target references cannot accept movable refs without strict immutable commit pinning
+    if [[ ! "$TARGET_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+      echo -e "${RED}Security Error: Target reference '${TARGET_REF}' is a movable ref.${NC}" >&2
+      echo -e "${RED}Movable tags or branches without static verification are strictly prohibited.${NC}" >&2
+      echo -e "${RED}Target references must be an immutable 40-character commit SHA.${NC}" >&2
+      exit 1
+    fi
+
     if [[ -n "${2:-}" ]]; then
       EXPECTED_ARCHIVE_SHA256="$2"
     else
-      echo -e "${RED}Security Error: Unknown or unverified target ref '${TARGET_REF}'.${NC}" >&2
-      echo -e "${RED}To install an alternate commit/tag, specify its expected archive SHA-256 digest as parameter 2.${NC}" >&2
+      echo -e "${RED}Security Error: Unverified commit SHA '${TARGET_REF}'.${NC}" >&2
+      echo -e "${RED}To install an alternate commit, specify its expected archive SHA-256 digest as parameter 2.${NC}" >&2
       exit 1
     fi
     ;;

@@ -102,12 +102,23 @@ cd packaging
 makepkg -si
 ```
 
-#### Option B: Via Standalone Root Bootstrap
-Fetch and execute the independent root bootstrap installer directly:
+#### Option B: Via Local Privileged Installer (Recommended for Source Checkouts)
+Clone the repository at the immutable pinned commit and execute the privileged installer locally:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/v1.0.0/bootstrap/install-system.sh | sudo bash
+git clone https://github.com/felipeasp/omanitro.git /tmp/omanitro-system
+cd /tmp/omanitro-system
+git checkout 3b8777ff145af0bc9094c2a417781fa4f4f4b8a8
+sudo ./install-privileged.sh
 ```
-The root bootstrap operates strictly in an isolated staging area (`0700 root:root`), downloads the archive directly into root storage, verifies the SHA-256 integrity digests on all root-staged components before touching system paths, and installs the verified payload atomically.
+
+#### Option C: Via Verified Remote Bootstrap
+If performing a remote bootstrap, download the script to a local file, verify its SHA-256 digest against the immutable hardcoded anchor, and execute with `sudo`:
+```bash
+curl -fsSL https://raw.githubusercontent.com/felipeasp/omanitro/67a9ea5abf95c8e9a08b03482167bc7c344f392d/bootstrap/install-system.sh -o /tmp/install-system.sh
+echo "5931307e0e2907c35f31432f506fc94efb38d83ea542a77645b84c76a56e4d9c  /tmp/install-system.sh" | sha256sum -c -
+sudo bash /tmp/install-system.sh
+```
+The installer operates strictly in an isolated staging area (`0700 root:root`), downloads the archive directly into root storage, verifies the SHA-256 integrity digests on all root-staged components before touching system paths, and installs the verified payload atomically.
 
 ---
 
